@@ -2,6 +2,7 @@
 #include <string.h>
 
 int main() {
-printf("Bonjour l'ISEP");
+printf("Bonjour le CNAM");
 }
+
 
