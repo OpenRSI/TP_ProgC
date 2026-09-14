@@ -23,7 +23,7 @@ Les objectifs du module sont de comprendre les différents aspects de la program
 - Tester une application.
 
 #### Environnement de programmation:
-Le laboratoire numérique : http://lab-boris.fr/
+Codespace
   
 #### Evaluation
 
