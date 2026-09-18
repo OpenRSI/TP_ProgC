@@ -126,8 +126,52 @@ Autres exemples :
 }             
 ```
 
+## Utilisation
+
+Depuis la racine du dépôt, compilez les programmes avec :
+
+```bash
+make -C TP6/src
+```
+
+Lancez ensuite le serveur depuis `TP6/src` :
+
+```bash
+cd TP6/src
+./serveur
+```
+
+Dans un autre terminal, envoyez une image BMP. Le nombre de couleurs est
+facultatif (10 par défaut) et doit être compris entre 1 et 30 :
+
+```bash
+cd TP6/src
+./client chemin/vers/image.bmp 12
+```
+
+Le client analyse les BMP non compressés en 24 ou 32 bits, trie les couleurs
+par fréquence et envoie au serveur les couleurs dominantes demandées (ou
+toutes les couleurs distinctes si l'image en contient moins). Le serveur crée
+`pie_chart.svg` dans son répertoire courant et tente de l'ouvrir avec Firefox.
+Si Firefox n'est pas installé ou si aucune interface graphique n'est
+disponible, le SVG est tout de même créé et peut être ouvert manuellement.
+
+Le protocole utilise des messages JSON terminés par un saut de ligne, par
+exemple :
+
+```json
+{"code":"couleurs","nombre":2,"valeurs":["#ff0000","#00ff00"]}
+```
+
+Les opérations JSON `message` et `calcule` peuvent également être testées avec
+le client :
+
+```bash
+./client --message "bonjour"
+./client --calculate + 23 45
+```
+
 ## Fichiers
 
 bmp.c, bmp.h, client.c, client.h, couleur.c, couleur.h, Makefile,
 serveur.c, serveur.h
-
