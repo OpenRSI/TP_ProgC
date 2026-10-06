@@ -1,23 +1,22 @@
-CC ?= gcc
-
-CFLAGS=-Wall -Wextra -g
-
-COBJS ?= client.o
-SOBJS ?= serveur.o 
-
-.SUFFIXES: .c .o
+CC = gcc
+CFLAGS = -Wall -Wextra -g
 
 SERVER = serveur
 CLIENT = client
 
 all: $(SERVER) $(CLIENT)
 
-$(SERVER): $(SOBJS)
-	$(CC) -o $(SERVER) $(SOBJS)
+$(SERVER): serveur.o
+	$(CC) $(CFLAGS) -o $(SERVER) serveur.o
 
-$(CLIENT): $(COBJS)
-	$(CC) -o $(CLIENT) $(COBJS)
+$(CLIENT): client.o
+	$(CC) $(CFLAGS) -o $(CLIENT) client.o
 
-.c.o: 
-	$(CC) -c $*.c
+serveur.o: serveur.c serveur.h
+	$(CC) $(CFLAGS) -c serveur.c
 
+client.o: client.c client.h
+	$(CC) $(CFLAGS) -c client.c
+
+clean:
+	rm -f *.o $(SERVER) $(CLIENT)

@@ -1,5 +1,5 @@
-COBJS ?= client.o bmp.o couleur.o
-SOBJS ?= serveur.o 
+COBJS = client.o bmp.o couleur.o protocole.o
+SOBJS = serveur.o protocole.o
 
 .SUFFIXES: .c .o
 
@@ -9,11 +9,15 @@ CLIENT = client
 all: $(SERVER) $(CLIENT)
 
 $(SERVER): $(SOBJS)
-	gcc -o $(SERVER) $(SOBJS) -lm
+	$(CC) -o $(SERVER) $(SOBJS) -lm
 
 $(CLIENT): $(COBJS)
-	gcc -o $(CLIENT) $(COBJS)
+	$(CC) -o $(CLIENT) $(COBJS)
 
-.c.o: 
-	gcc -Wall -Werror -ggdb3 -c $*.c
+.c.o:
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -Werror -ggdb3 -c $< -o $@
 
+clean:
+	rm -f $(SERVER) $(CLIENT) $(COBJS) $(SOBJS)
+
+.PHONY: all clean

@@ -2,214 +2,174 @@
  * SPDX-FileCopyrightText: 2021 John Samuel
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
- *
  */
 
-#define _GNU_SOURCE // to avoid c99 related warnings
 #include "couleur.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <search.h>
 
-// compter les couleurs distincts
-couleur_compteur *compte_couleur(couleur *c, int csize)
+static int compare24(const void *gauche, const void *droite)
 {
-  couleur_compteur *compteur;
-  COMPTEBIT bc;
-  int compteur_size = 0;
-  int i = 0;
+  const couleur24 *a = gauche;
+  const couleur24 *b = droite;
 
-  if (c->compte_bit == BITS24)
+  if (a->rouge != b->rouge)
+    return (int)a->rouge - (int)b->rouge;
+  if (a->vert != b->vert)
+    return (int)a->vert - (int)b->vert;
+  return (int)a->bleu - (int)b->bleu;
+}
+
+static int compare32(const void *gauche, const void *droite)
+{
+  const couleur32 *a = gauche;
+  const couleur32 *b = droite;
+
+  if (a->rouge != b->rouge)
+    return (int)a->rouge - (int)b->rouge;
+  if (a->vert != b->vert)
+    return (int)a->vert - (int)b->vert;
+  if (a->bleu != b->bleu)
+    return (int)a->bleu - (int)b->bleu;
+  return (int)a->alpha - (int)b->alpha;
+}
+
+static int compare_compte24(const void *gauche, const void *droite)
+{
+  const couleur24_compteur *a = gauche;
+  const couleur24_compteur *b = droite;
+  if (a->compte != b->compte)
+    return a->compte < b->compte ? 1 : -1;
+  return compare24(&a->c, &b->c);
+}
+
+static int compare_compte32(const void *gauche, const void *droite)
+{
+  const couleur32_compteur *a = gauche;
+  const couleur32_compteur *b = droite;
+  if (a->compte != b->compte)
+    return a->compte < b->compte ? 1 : -1;
+  return compare32(&a->c, &b->c);
+}
+
+couleur_compteur *compte_couleur(couleur *pixels, int taille)
+{
+  couleur_compteur *resultat;
+  int uniques = 0;
+
+  if (pixels == NULL || taille < 0 ||
+      (pixels->compte_bit != BITS24 && pixels->compte_bit != BITS32))
+    return NULL;
+
+  resultat = calloc(1, sizeof(*resultat));
+  if (resultat == NULL)
   {
-    bc = BITS24;
-    compteur = calloc(1, sizeof(couleur_compteur));
-    if (compteur == NULL)
-    {
-      perror("Erreur: allocation dynamique de memoire\n");
-      return NULL;
-    }
-    compteur->compte_bit = BITS24;
-    compteur->cc.cc24 = calloc(csize, sizeof(couleur_compteur));
-    if (compteur == NULL)
-    {
-      perror("Erreur: allocation dynamique de memoire\n");
-      return NULL;
-    }
+    perror("calloc");
+    return NULL;
   }
-  else if (c->compte_bit == BITS32)
+  resultat->compte_bit = pixels->compte_bit;
+
+  if (pixels->compte_bit == BITS24)
   {
-    bc = BITS32;
-    compteur = calloc(1, sizeof(couleur_compteur));
-    if (compteur == NULL)
+    qsort(pixels->c.c24, (size_t)taille, sizeof(couleur24), compare24);
+    resultat->cc.cc24 = calloc((size_t)taille, sizeof(couleur24_compteur));
+    if (taille != 0 && resultat->cc.cc24 == NULL)
+      goto erreur;
+
+    for (int i = 0; i < taille; ++i)
     {
-      perror("Erreur: allocation dynamique de memoire\n");
-      return NULL;
+      if (i == 0 || compare24(&pixels->c.c24[i - 1], &pixels->c.c24[i]) != 0)
+      {
+        resultat->cc.cc24[uniques].c = pixels->c.c24[i];
+        resultat->cc.cc24[uniques].compte = 1;
+        ++uniques;
+      }
+      else
+        ++resultat->cc.cc24[uniques - 1].compte;
     }
-    compteur->compte_bit = BITS32;
-    compteur->cc.cc32 = calloc(csize, sizeof(couleur_compteur));
-    if (compteur == NULL)
-    {
-      perror("Erreur: allocation dynamique de memoire\n");
-      return NULL;
-    }
+    qsort(resultat->cc.cc24, (size_t)uniques,
+          sizeof(couleur24_compteur), compare_compte24);
   }
   else
   {
-    perror("compte du bits inconnu");
-    return NULL;
-  }
+    qsort(pixels->c.c32, (size_t)taille, sizeof(couleur32), compare32);
+    resultat->cc.cc32 = calloc((size_t)taille, sizeof(couleur32_compteur));
+    if (taille != 0 && resultat->cc.cc32 == NULL)
+      goto erreur;
 
-  /*
-   * créer une table de hachage pour stocker les différentes couleurs et leur nombre
-   */
-  hcreate(csize);
-
-  for (i = 0; i < csize; i++)
-  {
-    ENTRY e, *es;
-    char key[256];
-
-    if (bc == BITS24)
+    for (int i = 0; i < taille; ++i)
     {
-      sprintf(key, "%hd:%hd:%hd", c->c.c24[i].rouge, c->c.c24[i].vert, c->c.c24[i].bleu);
-    }
-    else if (bc == BITS32)
-    {
-      sprintf(key, "%hd:%hd:%hd:%hd", c->c.c32[i].rouge, c->c.c32[i].vert, c->c.c32[i].bleu, c->c.c32[i].alpha);
-    }
-    e.key = key;
-
-    es = hsearch(e, FIND);
-    if (es == NULL)
-    {
-      compteur_size++;
-      if (c->compte_bit == BITS24)
+      if (i == 0 || compare32(&pixels->c.c32[i - 1], &pixels->c.c32[i]) != 0)
       {
-        compteur->cc.cc24[compteur_size - 1].c = c->c.c24[i];
-        compteur->cc.cc24[compteur_size - 1].compte = 1;
-        e.data = (void *)&compteur->cc.cc24[compteur_size - 1];
+        resultat->cc.cc32[uniques].c = pixels->c.c32[i];
+        resultat->cc.cc32[uniques].compte = 1;
+        ++uniques;
       }
       else
-      {
-        compteur->cc.cc32[compteur_size - 1].c = c->c.c32[i];
-        compteur->cc.cc32[compteur_size - 1].compte = 1;
-        e.data = (void *)&compteur->cc.cc32[compteur_size - 1];
-      }
-      es = hsearch(e, ENTER);
-      if (es == NULL)
-      {
-        perror("Erreur: impossible d'inserer\n");
-        return NULL;
-      }
+        ++resultat->cc.cc32[uniques - 1].compte;
     }
-    else
-    {
-      if (bc == BITS24)
-      {
-        couleur24_compteur *cc24 = (couleur24_compteur *)es->data;
-        cc24->compte++;
-      }
-      else if (bc == BITS32)
-      {
-        couleur32_compteur *cc32 = (couleur32_compteur *)es->data;
-        cc32->compte++;
-      }
-    }
+    qsort(resultat->cc.cc32, (size_t)uniques,
+          sizeof(couleur32_compteur), compare_compte32);
   }
 
-  compteur->size = compteur_size;
+  resultat->size = uniques;
+  return resultat;
 
-  hdestroy();
-  return compteur;
+erreur:
+  perror("calloc");
+  free(resultat);
+  return NULL;
 }
 
-// afficher les couleurs
-void print_couleur(couleur *c, int csize)
+void print_couleur(couleur *pixels, int taille)
 {
-  int i = 0;
+  if (pixels == NULL)
+    return;
 
-  for (i = 0; i < csize; i++)
+  for (int i = 0; i < taille; ++i)
   {
-    if (c->compte_bit == BITS24)
-    { // 3 octets (RGB)
-      printf("%5x %5x %5x\n", c->c.c24[i].rouge, c->c.c24[i].vert, c->c.c24[i].bleu);
-    }
-    else if (c->compte_bit == BITS32)
-    { // 4 octets (RGBA)
-      printf("%5x %5x %5x %5x\n", c->c.c32[i].rouge, c->c.c32[i].vert, c->c.c32[i].bleu, c->c.c32[i].alpha);
-    }
-    else
-    {
-      return;
-    }
+    if (pixels->compte_bit == BITS24)
+      printf("%02x %02x %02x\n", pixels->c.c24[i].rouge,
+             pixels->c.c24[i].vert, pixels->c.c24[i].bleu);
+    else if (pixels->compte_bit == BITS32)
+      printf("%02x %02x %02x %02x\n", pixels->c.c32[i].rouge,
+             pixels->c.c32[i].vert, pixels->c.c32[i].bleu,
+             pixels->c.c32[i].alpha);
   }
 }
 
-// afficher le compte de couleurs distincts
-void print_couleur_compteur(couleur_compteur *ccompteur)
+void print_couleur_compteur(couleur_compteur *compteur)
 {
-  int i = 0;
+  if (compteur == NULL)
+    return;
 
-  for (i = 0; i < ccompteur->size; i++)
+  for (int i = 0; i < compteur->size; ++i)
   {
-    if (ccompteur->compte_bit == BITS24)
-    {
-      printf("%5hx %5hx %5hx: %10d\n", ccompteur->cc.cc24[i].c.rouge, ccompteur->cc.cc24[i].c.vert, ccompteur->cc.cc24[i].c.bleu, ccompteur->cc.cc24[i].compte);
-    }
-    else if (ccompteur->compte_bit == BITS32)
-    {
-      printf("%5hx %5hx %5hx %5hx: %10d\n", ccompteur->cc.cc32[i].c.rouge, ccompteur->cc.cc32[i].c.vert, ccompteur->cc.cc32[i].c.bleu, ccompteur->cc.cc32[i].c.alpha, ccompteur->cc.cc32[i].compte);
-    }
+    if (compteur->compte_bit == BITS24)
+      printf("%02x %02x %02x: %d\n",
+             compteur->cc.cc24[i].c.rouge,
+             compteur->cc.cc24[i].c.vert,
+             compteur->cc.cc24[i].c.bleu,
+             compteur->cc.cc24[i].compte);
+    else if (compteur->compte_bit == BITS32)
+      printf("%02x %02x %02x %02x: %d\n",
+             compteur->cc.cc32[i].c.rouge,
+             compteur->cc.cc32[i].c.vert,
+             compteur->cc.cc32[i].c.bleu,
+             compteur->cc.cc32[i].c.alpha,
+             compteur->cc.cc32[i].compte);
   }
 }
 
-/*
- * fonction permettant de comparer deux couleurs
- */
-static int compare_compteur(const void *ccp1, const void *ccp2, void *compte_bitp)
+void trier_couleur_compteur(couleur_compteur *compteur)
 {
-  COMPTEBIT *bc = (COMPTEBIT *)compte_bitp;
-  if (*bc == BITS24)
-  {
-    couleur24_compteur *cc241 = (couleur24_compteur *)ccp1;
-    couleur24_compteur *cc242 = (couleur24_compteur *)ccp2;
-    if (cc241->compte == cc242->compte)
-    {
-      return 0;
-    }
-    else if (cc241->compte > cc242->compte)
-    {
-      return 1;
-    }
-  }
-  else if (*bc == BITS32)
-  {
-    couleur32_compteur *cc321 = (couleur32_compteur *)ccp1;
-    couleur32_compteur *cc322 = (couleur32_compteur *)ccp2;
-    if (cc321->compte == cc322->compte)
-    {
-      return 0;
-    }
-    else if (cc321->compte > cc322->compte)
-    {
-      return 1;
-    }
-  }
-  return -1;
-}
-
-// trier le compte de couleurs distincts
-void trier_couleur_compteur(couleur_compteur *ccompteur)
-{
-  COMPTEBIT bc = ccompteur->compte_bit;
-  if (ccompteur->compte_bit == BITS24)
-  {
-    qsort_r(ccompteur->cc.cc24, ccompteur->size, sizeof(couleur24_compteur),
-            compare_compteur, (void *)&bc);
-  }
-  else if (ccompteur->compte_bit == BITS32)
-  {
-    qsort_r(ccompteur->cc.cc32, ccompteur->size, sizeof(couleur32_compteur),
-            compare_compteur, (void *)&bc);
-  }
+  if (compteur == NULL)
+    return;
+  if (compteur->compte_bit == BITS24)
+    qsort(compteur->cc.cc24, (size_t)compteur->size,
+          sizeof(couleur24_compteur), compare_compte24);
+  else if (compteur->compte_bit == BITS32)
+    qsort(compteur->cc.cc32, (size_t)compteur->size,
+          sizeof(couleur32_compteur), compare_compte32);
 }

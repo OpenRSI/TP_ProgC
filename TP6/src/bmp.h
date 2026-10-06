@@ -45,5 +45,5 @@ typedef struct
 #pragma pack(pop)
 
 // analyse d'un fichier bmp (compter et trier)
-couleur_compteur *analyse_bmp_image(char *);
+couleur_compteur *analyse_bmp_image(const char *);
 #endif

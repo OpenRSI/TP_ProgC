@@ -1,91 +1,80 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-verify_if_not_empty_file (){
-  if [ -s $1 ]; then
-          # file not empty.
-          return 0
+set -u
+
+root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+read -r -a compiler <<< "${CC:-gcc}"
+errors=0
+
+if ((${#compiler[@]} == 0)) || ! command -v "${compiler[0]}" >/dev/null 2>&1; then
+  printf 'Erreur : compilateur C introuvable (%s).\n' "${CC:-gcc}" >&2
+  exit 2
+fi
+
+printf '%s\n' '============================================================'
+printf '%s\n' '                 Evaluation des travaux pratiques'
+printf '%s\n' '============================================================'
+printf 'Compilateur : %s\n' "${compiler[*]}"
+
+for number in {1..6}; do
+  practical="TP${number}"
+  practical_dir="$root_dir/$practical"
+  source_dir="$practical_dir/src"
+  documentation="$practical_dir/TP${number}.md"
+  practical_errors=0
+
+  printf '\n%s\n' "[$practical]"
+
+  if [[ -s "$documentation" ]]; then
+    printf '  OK  Documentation presente\n'
   else
-          # Empty file
-          return 1
+    printf '  ECHEC Documentation absente ou vide : %s\n' "$documentation"
+    practical_errors=$((practical_errors + 1))
   fi
-}
 
-verify_code (){
-  local directory=$1
-  local filename=$2
-  echo "                                       Verifying $directory/$filename                                         "
-  # Internal code
-}
-
-compile_files_in_directory (){
-  local directory=$1
-  local filelist=$2
-  IFS=";" read -r -a files <<< "${filelist}"
-  for file in "${files[@]}";
-  do
-    local filename="src/$file"
-    verify_if_not_empty_file "$filename"
-    local value=$?
-    if [ "$value" = 1 ]
-    then  
-      echo "                                       Empty C file: $directory/$filename                                  "
+  if [[ ! -d "$source_dir" ]]; then
+    printf '  ECHEC Dossier source absent : %s\n' "$source_dir"
+    practical_errors=$((practical_errors + 1))
+  else
+    sources=("$source_dir"/*.c)
+    if [[ ! -e "${sources[0]}" ]]; then
+      printf '  ECHEC Aucun fichier C dans %s\n' "$source_dir"
+      practical_errors=$((practical_errors + 1))
     else
-      echo "                                       Compiling $directory/$filename                                      "
-      gcc -c $filename # Compile to check for errors
-      gcc -c -Wall -Werror -Wextra $filename # Compile to check for errors and warnings
-      verify_code $directory $filename
-      rm -f *.o *.gch src/*.o src/*.gch
+      for source in "${sources[@]}"; do
+        if [[ ! -s "$source" ]]; then
+          printf '  ECHEC Fichier C absent ou vide : %s\n' "${source#"$root_dir"/}"
+          practical_errors=$((practical_errors + 1))
+          continue
+        fi
+
+        printf '  C   %s ... ' "${source#"$root_dir"/}"
+        if output=$("${compiler[@]}" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+          -fsyntax-only "$source" 2>&1); then
+          printf '%s\n' 'OK'
+        else
+          printf '%s\n' 'ECHEC'
+          printf '%s\n' "$output" | sed 's/^/      /'
+          practical_errors=$((practical_errors + 1))
+        fi
+      done
     fi
-  done
-
-}
-
-echo "================================================================================================"
-echo "                                       Evaluation                                               "
-echo "================================================================================================"
-
-TP[0]="binaire.c;bonjour.c;boucles.c;cercle.c;conditions.c;opérateurs2.c;opérateurs.c;sizeof_types.c;variables.c"
-TP[1]="bits.c;chaine.c;couleurs.c;etudiant2.c;etudiant.c;fibonacci.c;ptrvariables.c;puissance.c;tableauptr.c"
-TP[2]="chercher.c;couleur_compteur.c;couleurs.c;grand_petit.c;octets.c;recherche_dichotomique.c;sizeof.c;tri.c"
-TP[3]="calcule.c;chercherfichier.c;etudiant_bd.c;factorielle.c;fichier.c;fichier.h;liste.c;liste.h;main.c;operator.c;operator.h"
-TP[4]="client.c;client.h;repertoire.c;repertoire.h;serveur.c;serveur.h"
-TP[5]="bmp.c;bmp.h;client.c;client.h;couleur.c;couleur.h;serveur.c;serveur.h"
-
-i=1
-for tpfilelist in "${TP[@]}"
-do
-  directory="TP$i"
-  echo "------------------------------------------------------------------------------------------------"
-  echo "                                       Evaluating $directory                                     "
-  echo "------------------------------------------------------------------------------------------------"
-  i=$((i + 1))
-  cd "../$directory"
-  ls
-  ls src/
-
-  verify_if_not_empty_file "CONTRIBUTORS.md"
-  value=$?
-  if [ "$value" = 1 ]
-  then  
-     echo "Empty CONTRIBUTORS.md file"
-  else
-     verify_code $directory "CONTRIBUTORS.md"
   fi
 
-  verify_if_not_empty_file "README.md"
-  value=$?
-  if [ "$value" = 1 ]
-  then  
-     echo "Empty README.md file"
+  if ((practical_errors == 0)); then
+    printf '  Resultat : SUCCES\n'
   else
-     verify_code $directory "README.md"
+    printf '  Resultat : ECHEC (%d probleme(s))\n' "$practical_errors"
+    errors=$((errors + practical_errors))
   fi
-  
-  compile_files_in_directory $directory ${tpfilelist}
-  cd "../evaluation"
 done
-echo "================================================================================================"
-echo "                                       Evaluation Finished                                      "
-echo "================================================================================================"
 
-unset tpfilelist TP i value directory
+printf '\n%s\n' '============================================================'
+if ((errors == 0)); then
+  printf '%s\n' 'Evaluation terminee : tous les controles ont reussi.'
+else
+  printf 'Evaluation terminee : %d probleme(s) detecte(s).\n' "$errors"
+fi
+printf '%s\n' '============================================================'
+
+((errors == 0))
